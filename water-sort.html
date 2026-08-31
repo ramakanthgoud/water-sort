@@ -1,0 +1,930 @@
+<!-- filename: water-sort.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#061228"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="Water Sort"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<title>Water Sort</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{
+  width:100%;height:100%;overflow:hidden;
+  background:#0a1628;
+  font-family:'Nunito',sans-serif;
+  touch-action:none;user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#app{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  max-width:480px;margin:0 auto;
+  background:radial-gradient(ellipse at 50% 0%, #0d2060 0%, #0a1628 70%);
+}
+
+/* ── HUD ── */
+#hud{
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+  flex-shrink:0;padding:12px 8px 8px;gap:8px;
+}
+.hbox{
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:16px;
+  display:flex;flex-direction:column;align-items:center;
+  padding:10px 6px 8px;
+  backdrop-filter:blur(8px);
+}
+.hlbl{font-size:9px;font-weight:800;letter-spacing:3px;color:rgba(255,255,255,.3);text-transform:uppercase;margin-bottom:4px;}
+.hnum{font-size:28px;font-weight:900;color:#fff;line-height:1;letter-spacing:-1px;}
+
+/* ── PROGRESS ── */
+#progRow{
+  display:flex;align-items:center;gap:10px;
+  padding:0 14px 6px;flex-shrink:0;
+}
+#progLbl{font-size:11px;font-weight:900;letter-spacing:2px;color:#86BC25;min-width:52px;}
+#progOuter{flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;}
+#progFill{
+  height:100%;width:0%;border-radius:3px;
+  background:linear-gradient(90deg,#86BC25,#00ffaa);
+  transition:width .6s ease;
+}
+
+/* ── TOOLBAR ── */
+#toolbar{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:4px 14px 8px;flex-shrink:0;
+}
+.tbtn{
+  display:flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:24px;padding:7px 16px;
+  font-size:13px;font-weight:800;color:rgba(255,255,255,.7);
+  cursor:pointer;font-family:'Nunito',sans-serif;
+  transition:all .15s;
+}
+.tbtn:active{transform:scale(.94);background:rgba(255,255,255,.14);}
+.tbtn.disabled{opacity:.35;pointer-events:none;}
+#moveLabel{
+  font-size:12px;font-weight:800;letter-spacing:1px;
+  color:rgba(255,255,255,.3);margin-left:auto;
+}
+
+/* ── GAME AREA ── */
+#gameArea{
+  flex:1;position:relative;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+  padding:10px 8px 50px;
+}
+#tubeGrid{
+  display:flex;flex-wrap:wrap;
+  align-items:flex-end;justify-content:center;
+  gap:10px;
+  width:100%;
+}
+
+/* ── TUBE ── */
+.tube-wrap{
+  display:flex;flex-direction:column;align-items:center;
+  cursor:pointer;
+  transition:transform .15s;
+  position:relative;
+}
+.tube-wrap.selected .tube-body{
+  box-shadow:0 0 0 3px #00f0ff, 0 0 20px rgba(0,240,255,.5);
+}
+.tube-wrap.selected{transform:translateY(-18px);}
+.tube-wrap.bounce{animation:tubeBounce .35s ease;}
+@keyframes tubeBounce{0%,100%{transform:translateY(0);}30%{transform:translateY(-8px);}60%{transform:translateY(2px);}80%{transform:translateY(-4px);}};
+.tube-wrap.shake{animation:tubeShake .35s ease;}
+@keyframes tubeShake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}};
+.tube-wrap.done .tube-body{
+  box-shadow:0 0 0 2px rgba(134,188,37,.6), 0 0 22px rgba(134,188,37,.3);
+}
+
+/* Glass tube */
+.tube-body{
+  position:relative;
+  border-radius:0 0 50px 50px;
+  border:2.5px solid rgba(255,255,255,.25);
+  border-top:none;
+  background:rgba(255,255,255,.04);
+  overflow:hidden;
+  transition:box-shadow .2s;
+  flex-shrink:0;
+}
+/* Glass reflections */
+.tube-body::before{
+  content:'';
+  position:absolute;top:0;left:8%;
+  width:20%;height:100%;
+  background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,.04));
+  border-radius:0 0 30px 30px;
+  pointer-events:none;z-index:10;
+}
+.tube-body::after{
+  content:'';
+  position:absolute;top:0;right:8%;
+  width:8%;height:60%;
+  background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.02));
+  border-radius:0 0 10px 10px;
+  pointer-events:none;z-index:10;
+}
+/* Tube top cap */
+.tube-top{
+  width:calc(100% + 8px);height:8px;margin-left:-4px;
+  background:linear-gradient(180deg,rgba(255,255,255,.25),rgba(255,255,255,.08));
+  border-radius:4px 4px 0 0;
+  border:1px solid rgba(255,255,255,.2);
+  border-bottom:none;
+  flex-shrink:0;
+}
+/* Layers inside tube */
+.tube-layers{
+  position:absolute;bottom:0;left:0;right:0;
+  display:flex;flex-direction:column-reverse;
+  height:100%;
+  z-index:2;
+}
+.layer{
+  width:100%;
+  transition:height .35s cubic-bezier(.4,0,.2,1),background .2s;
+  position:relative;
+  flex-shrink:0;
+}
+.layer::after{
+  content:'';
+  position:absolute;top:0;left:0;right:0;
+  height:4px;
+  background:rgba(255,255,255,.2);
+  pointer-events:none;
+}
+.layer:last-child::after{display:none;}
+
+/* Pour animation overlay */
+.pour-drop{
+  position:absolute;
+  width:18px;border-radius:50%;
+  pointer-events:none;z-index:50;
+  animation:dropFall .35s ease-in forwards;
+}
+@keyframes dropFall{from{opacity:1;transform:scaleY(1);}to{opacity:0;transform:scaleY(.2) translateY(30px);}}
+
+/* Lives */
+#livesRow{
+  position:absolute;bottom:14px;
+  left:50%;transform:translateX(-50%);
+  display:flex;gap:14px;pointer-events:none;z-index:5;
+}
+.lheart{
+  font-size:30px;line-height:1;
+  filter:drop-shadow(0 0 8px rgba(255,60,100,.6));
+  transition:all .3s;
+}
+.lheart.gone{opacity:.12;transform:scale(.3);filter:none;}
+
+/* ── OVERLAYS ── */
+.overlay{
+  position:absolute;inset:0;
+  background:rgba(8,16,40,.97);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:30;padding:24px 22px;text-align:center;
+}
+.overlay.hide{display:none;}
+
+/* Intro */
+.logo{
+  font-size:52px;font-weight:900;letter-spacing:2px;
+  line-height:1;margin-bottom:6px;
+  background:linear-gradient(135deg,#00ccff,#0066ff,#aa00ff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.logo-sub{
+  font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.2);
+  text-transform:uppercase;margin-bottom:36px;
+}
+/* How-to tubes */
+.demo-row{
+  display:flex;gap:14px;align-items:flex-end;
+  margin-bottom:30px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:20px;padding:18px 24px;
+}
+.how-steps{
+  display:flex;flex-direction:column;gap:9px;
+  width:100%;max-width:300px;margin-bottom:32px;
+}
+.step{
+  display:flex;align-items:center;gap:12px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;padding:10px 14px;text-align:left;
+}
+.step-num{
+  width:28px;height:28px;border-radius:50%;
+  background:linear-gradient(135deg,#0088ff,#0044cc);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:900;color:#fff;flex-shrink:0;
+}
+.step-txt{font-size:12px;color:rgba(255,255,255,.5);line-height:1.4;}
+.step-txt b{display:block;font-size:13px;color:#fff;margin-bottom:2px;}
+
+/* Level complete */
+.lc-stars{font-size:48px;margin-bottom:8px;letter-spacing:6px;}
+.lc-title{font-size:42px;font-weight:900;color:#fff;margin-bottom:4px;letter-spacing:1px;}
+.lc-sub{font-size:12px;letter-spacing:3px;color:rgba(255,255,255,.25);text-transform:uppercase;margin-bottom:28px;}
+.lc-stats{
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;
+  width:100%;max-width:300px;margin-bottom:28px;
+}
+.sbox{
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
+  border-radius:14px;padding:12px 6px;
+}
+.sv{font-size:26px;font-weight:900;color:#fff;line-height:1;}
+.sl{font-size:9px;font-weight:800;letter-spacing:2px;color:rgba(255,255,255,.25);margin-top:4px;text-transform:uppercase;}
+
+/* Game over */
+.go-num{font-size:88px;font-weight:900;color:#fff;line-height:1;letter-spacing:-3px;}
+
+.btn{
+  width:220px;height:54px;border:none;border-radius:28px;
+  font-size:17px;font-weight:900;letter-spacing:2px;
+  font-family:'Nunito',sans-serif;cursor:pointer;
+  background:linear-gradient(135deg,#0088ff,#0044cc);
+  color:#fff;box-shadow:0 0 30px rgba(0,136,255,.4);
+  transition:transform .1s,box-shadow .1s;
+}
+.btn:active{transform:scale(.95);}
+.btn-green{background:linear-gradient(135deg,#86BC25,#00dd88);color:#071a0f;box-shadow:0 0 28px rgba(134,188,37,.4);}
+.btn-ghost{
+  margin-top:12px;
+  width:220px;height:46px;border:1px solid rgba(255,255,255,.12);
+  border-radius:28px;background:transparent;
+  font-size:14px;font-weight:700;letter-spacing:1px;
+  color:rgba(255,255,255,.3);cursor:pointer;font-family:'Nunito',sans-serif;
+  transition:border-color .2s,color .2s;
+}
+.btn-ghost:active{border-color:rgba(255,255,255,.3);color:rgba(255,255,255,.5);}
+
+/* Flash */
+#flash{position:absolute;inset:0;z-index:25;pointer-events:none;opacity:0;transition:opacity .07s;}
+
+/* Confetti canvas */
+#confettiCv{position:absolute;inset:0;pointer-events:none;z-index:28;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hbox"><span class="hlbl">SCORE</span><span class="hnum" id="eScore">0</span></div>
+    <div class="hbox"><span class="hlbl">LEVEL</span><span class="hnum" id="eLevel">1</span></div>
+    <div class="hbox"><span class="hlbl">BEST</span> <span class="hnum" id="eBest">0</span></div>
+  </div>
+
+  <!-- Progress -->
+  <div id="progRow">
+    <span id="progLbl">LVL 1</span>
+    <div id="progOuter"><div id="progFill"></div></div>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <button class="tbtn" id="btnUndo">↩ UNDO</button>
+    <button class="tbtn" id="btnRestart">↺ RESTART</button>
+    <span id="moveLabel">MOVES: 0</span>
+  </div>
+
+  <!-- Game area -->
+  <div id="gameArea">
+    <div id="tubeGrid"></div>
+    <!-- Lives -->
+    <div id="livesRow">
+      <span class="lheart" id="lh0">❤️</span>
+      <span class="lheart" id="lh1">❤️</span>
+      <span class="lheart" id="lh2">❤️</span>
+    </div>
+  </div>
+
+  <div id="flash"></div>
+  <canvas id="confettiCv"></canvas>
+
+  <!-- Intro overlay -->
+  <div class="overlay" id="ovIntro">
+    <div class="logo">WATER<br>SORT</div>
+    <div class="logo-sub">pour · sort · solve</div>
+    <div class="how-steps">
+      <div class="step"><div class="step-num">1</div><div class="step-txt"><b>TAP A TUBE</b>Select a tube — it lifts up to show it's chosen</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-txt"><b>TAP TO POUR</b>Tap another tube to pour the top color into it</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-txt"><b>MATCH COLORS</b>Same color only pours onto same color or empty tube</div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-txt"><b>SOLVE IT</b>Each tube must contain only ONE color to complete</div></div>
+    </div>
+    <button class="btn btn-green" id="btnPlay">PLAY NOW 🎮</button>
+  </div>
+
+  <!-- Level complete overlay -->
+  <div class="overlay hide" id="ovComplete">
+    <div class="lc-stars" id="lcStars">⭐⭐⭐</div>
+    <div class="lc-title" id="lcTitle">LEVEL 1</div>
+    <div class="lc-sub">COMPLETE!</div>
+    <div class="lc-stats">
+      <div class="sbox"><div class="sv" id="lcMoves">-</div><div class="sl">Moves</div></div>
+      <div class="sbox"><div class="sv" id="lcScore">-</div><div class="sl">Score</div></div>
+      <div class="sbox"><div class="sv" id="lcStarsNum">-</div><div class="sl">Stars</div></div>
+    </div>
+    <button class="btn btn-green" id="btnNext">NEXT LEVEL →</button>
+    <button class="btn-ghost" id="btnReplayAfter">↺ Replay Level</button>
+  </div>
+
+  <!-- Game over overlay -->
+  <div class="overlay hide" id="ovGameOver">
+    <div style="font-size:48px;margin-bottom:10px;">💧</div>
+    <div style="font-size:42px;font-weight:900;color:#fff;margin-bottom:6px;">STUCK!</div>
+    <div style="font-size:12px;letter-spacing:2px;color:rgba(255,255,255,.25);text-transform:uppercase;margin-bottom:30px;">no valid moves left</div>
+    <div style="font-size:84px;font-weight:900;color:#fff;line-height:1;letter-spacing:-3px;margin-bottom:8px;" id="goScore">0</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.25);letter-spacing:1px;margin-bottom:6px;" id="goBest">BEST 0</div>
+    <div style="font-size:12px;font-weight:800;color:#86BC25;letter-spacing:2px;margin-bottom:32px;" id="goNew"></div>
+    <button class="btn" id="btnRetry">TRY AGAIN</button>
+  </div>
+
+</div>
+
+<script>
+
+// ── DOM ───────────────────────────────────────────────────
+const eScore      = document.getElementById('eScore');
+const eLevel      = document.getElementById('eLevel');
+const eBest       = document.getElementById('eBest');
+const progFill    = document.getElementById('progFill');
+const progLbl     = document.getElementById('progLbl');
+const btnUndo     = document.getElementById('btnUndo');
+const btnRestart  = document.getElementById('btnRestart');
+const moveLabel   = document.getElementById('moveLabel');
+const tubeGrid    = document.getElementById('tubeGrid');
+const lhEls       = [0,1,2].map(i=>document.getElementById('lh'+i));
+const flashEl     = document.getElementById('flash');
+const confettiCv  = document.getElementById('confettiCv');
+const ovIntro     = document.getElementById('ovIntro');
+const ovComplete  = document.getElementById('ovComplete');
+const ovGameOver  = document.getElementById('ovGameOver');
+const app         = document.getElementById('app');
+
+// ── Color palette ─────────────────────────────────────────
+const COLORS = [
+  {id:'red',    fill:'#ff3355', light:'#ff7788', dark:'#cc1133', label:'🔴'},
+  {id:'blue',   fill:'#0088ff', light:'#44aaff', dark:'#0055cc', label:'🔵'},
+  {id:'yellow', fill:'#ffcc00', light:'#ffee55', dark:'#cc9900', label:'🟡'},
+  {id:'green',  fill:'#00cc55', light:'#44ee88', dark:'#009933', label:'🟢'},
+  {id:'purple', fill:'#aa22ff', light:'#cc66ff', dark:'#7700cc', label:'🟣'},
+  {id:'orange', fill:'#ff7700', light:'#ffaa44', dark:'#cc5500', label:'🟠'},
+  {id:'pink',   fill:'#ff44aa', light:'#ff88cc', dark:'#cc2277', label:'💗'},
+  {id:'teal',   fill:'#00ccbb', light:'#44eedd', dark:'#009988', label:'🩵'},
+  {id:'lime',   fill:'#88ee00', light:'#bbff44', dark:'#55bb00', label:'💚'},
+  {id:'cyan',   fill:'#00bbff', light:'#55ddff', dark:'#0088cc', label:'🩵'},
+];
+
+// ── Audio ─────────────────────────────────────────────────
+const AC = new(window.AudioContext||window.webkitAudioContext)();
+function tone(f,d,v,t){
+  try{
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.connect(g);g.connect(AC.destination);
+    o.type=t||'sine';o.frequency.value=f;
+    g.gain.setValueAtTime(v||.1,AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);
+    o.start();o.stop(AC.currentTime+d);
+  }catch(e){}
+}
+const SFX = {
+  select  : ()=> tone(660,.06,.12),
+  pour    : ()=>{ tone(440,.12,.1); setTimeout(()=>tone(380,.1,.08),80); },
+  wrong   : ()=> tone(200,.18,.14,'sawtooth'),
+  done    : (i)=> setTimeout(()=>tone(523+i*100,.08,.15),i*70),
+  complete: ()=>[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>tone(f,.1,.18),i*80)),
+  over    : ()=>[300,240,180].forEach((f,i)=>setTimeout(()=>tone(f,.18,.18,'sawtooth'),i*90)),
+};
+
+// ── Game state ────────────────────────────────────────────
+const TUBE_CAP = 4;     // layers per tube
+let tubes     = [];     // array of arrays (bottom→top), each element = color id
+let history   = [];     // for undo
+let selected  = -1;
+let level     = 1;
+let score     = 0;
+let moves     = 0;
+let lives     = 3;
+let gameOn    = false;
+let animating = false;
+let levelStartScore = 0;
+
+// ── Level config ──────────────────────────────────────────
+function getLevelCfg(lvl){
+  // numColors, emptyTubes
+  if(lvl===1)  return{colors:2, empty:1};
+  if(lvl===2)  return{colors:2, empty:2};
+  if(lvl===3)  return{colors:3, empty:1};
+  if(lvl===4)  return{colors:3, empty:2};
+  if(lvl===5)  return{colors:4, empty:1};
+  if(lvl===6)  return{colors:4, empty:2};
+  if(lvl===7)  return{colors:5, empty:1};
+  if(lvl<=9)   return{colors:5, empty:2};
+  if(lvl<=11)  return{colors:6, empty:2};
+  if(lvl<=13)  return{colors:7, empty:2};
+  if(lvl<=16)  return{colors:8, empty:2};
+  if(lvl<=20)  return{colors:9, empty:2};
+  return           {colors:10, empty:2};
+}
+
+// ── Puzzle generator ──────────────────────────────────────
+function generatePuzzle(lvl){
+  const {colors:numC, empty:numE} = getLevelCfg(lvl);
+  let attempts = 0;
+  while(attempts < 200){
+    attempts++;
+    // Create pool: 4 of each color
+    const pool = [];
+    for(let c=0;c<numC;c++)
+      for(let s=0;s<TUBE_CAP;s++) pool.push(c);
+    shuffle(pool);
+    // Fill numC tubes
+    const newTubes = [];
+    for(let i=0;i<numC;i++) newTubes.push(pool.slice(i*TUBE_CAP,(i+1)*TUBE_CAP));
+    // Add empty tubes
+    for(let e=0;e<numE;e++) newTubes.push([]);
+    // Reject if already solved
+    if(isSolved(newTubes)) continue;
+    // Reject if all tubes are uniform already (boring start)
+    const uniformCount = newTubes.filter(t=>t.length===TUBE_CAP && t.every(c=>c===t[0])).length;
+    if(uniformCount >= numC-1) continue;
+    return newTubes;
+  }
+  return null;
+}
+
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]]=[arr[j],arr[i]];
+  }
+  return arr;
+}
+
+function isSolved(tb){
+  return tb.every(t=>
+    t.length===0 ||
+    (t.length===TUBE_CAP && t.every(c=>c===t[0]))
+  );
+}
+
+// ── Pour logic ─────────────────────────────────────────────
+function canPour(from, to){
+  if(from===to) return false;
+  if(tubes[from].length===0) return false;
+  if(tubes[to].length===TUBE_CAP) return false;
+  // top color of from
+  const topFrom = tubes[from][tubes[from].length-1];
+  // destination empty or top matches
+  if(tubes[to].length===0) return true;
+  const topTo = tubes[to][tubes[to].length-1];
+  return topFrom===topTo;
+}
+
+// Count how many identical top-color layers to pour at once
+function countPourLayers(fromIdx){
+  const t = tubes[fromIdx];
+  if(t.length===0) return 0;
+  const top = t[t.length-1];
+  let count=0;
+  for(let i=t.length-1;i>=0;i--){
+    if(t[i]===top) count++;
+    else break;
+  }
+  return count;
+}
+
+function pour(fromIdx, toIdx){
+  const fromTube = [...tubes[fromIdx]];
+  const toTube   = [...tubes[toIdx]];
+  // How many layers to move
+  const topColor = fromTube[fromTube.length-1];
+  const space    = TUBE_CAP - toTube.length;
+  let count = 0;
+  for(let i=fromTube.length-1;i>=0;i--){
+    if(fromTube[i]===topColor) count++;
+    else break;
+  }
+  count = Math.min(count, space);
+  // Move
+  for(let i=0;i<count;i++){
+    toTube.push(fromTube.pop());
+  }
+  return{newFrom:fromTube, newTo:toTube, count};
+}
+
+// ── Check any valid moves exist ────────────────────────────
+function hasValidMoves(){
+  for(let i=0;i<tubes.length;i++)
+    for(let j=0;j<tubes.length;j++)
+      if(canPour(i,j)) return true;
+  return false;
+}
+
+// ── Tube sizing ────────────────────────────────────────────
+function getTubeSize(){
+  const gameH = document.getElementById('gameArea').getBoundingClientRect().height - 60;
+  const gameW = app.getBoundingClientRect().width - 20;
+  const n = tubes.length;
+  // Max tube height
+  const maxH = Math.min(gameH * .72, 220);
+  // Columns
+  const cols = n <= 4 ? n : n <= 6 ? Math.ceil(n/2) : n <= 9 ? Math.ceil(n/2) : 5;
+  const maxW = Math.floor((gameW - (cols-1)*10 - 20) / cols);
+  const w = Math.max(38, Math.min(maxW, 68));
+  const h = Math.min(maxH, w * 2.8);
+  return{w, h, cols};
+}
+
+// ── Build DOM tubes ────────────────────────────────────────
+function renderTubes(){
+  tubeGrid.innerHTML = '';
+  const {w,h} = getTubeSize();
+  const layerH = (h-4) / TUBE_CAP;
+
+  tubes.forEach((tube, ti)=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'tube-wrap';
+    wrap.dataset.idx = ti;
+    // Check if this tube is complete
+    const isDone = tube.length===TUBE_CAP && tube.every(c=>c===tube[0]);
+    if(isDone) wrap.classList.add('done');
+
+    // Top cap
+    const cap = document.createElement('div');
+    cap.className = 'tube-top';
+    cap.style.width = (w+8)+'px';
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'tube-body';
+    body.style.width  = w+'px';
+    body.style.height = h+'px';
+
+    // Layers container
+    const layers = document.createElement('div');
+    layers.className = 'tube-layers';
+    // Draw layers bottom→top
+    tube.forEach((colorIdx, li)=>{
+      const layer = document.createElement('div');
+      layer.className = 'layer';
+      layer.style.height = layerH+'px';
+      const col = COLORS[colorIdx];
+      // Gradient per layer for liquid look
+      layer.style.background = `linear-gradient(180deg,${col.light}cc,${col.fill},${col.dark})`;
+      layer.style.boxShadow  = `inset 0 2px 4px rgba(255,255,255,.25)`;
+      layers.appendChild(layer);
+    });
+    // Empty space layers
+    for(let e=tube.length;e<TUBE_CAP;e++){
+      const empty = document.createElement('div');
+      empty.className = 'layer';
+      empty.style.height = layerH+'px';
+      empty.style.background = 'transparent';
+      empty.style.boxShadow  = 'none';
+      empty.querySelector = ()=>null;
+      // Remove the after border on empty
+      empty.classList.add('empty-layer');
+      layers.appendChild(empty);
+    }
+
+    body.appendChild(layers);
+    wrap.appendChild(cap);
+    wrap.appendChild(body);
+    wrap.addEventListener('click', ()=>onTubeTap(ti));
+    wrap.addEventListener('touchend', e=>{ e.preventDefault(); onTubeTap(ti); },{passive:false});
+    tubeGrid.appendChild(wrap);
+  });
+}
+
+// ── Tap handler ────────────────────────────────────────────
+function onTubeTap(idx){
+  if(!gameOn || animating) return;
+  AC.resume();
+
+  if(selected === -1){
+    // Select
+    if(tubes[idx].length === 0) return; // can't select empty
+    // Check if this tube is already done
+    const t = tubes[idx];
+    if(t.length===TUBE_CAP && t.every(c=>c===t[0])){ shakeWrap(idx); return; }
+    selected = idx;
+    SFX.select();
+    highlightSelected();
+  } else {
+    if(idx === selected){
+      // Deselect
+      selected = -1;
+      highlightSelected();
+      return;
+    }
+    if(!canPour(selected, idx)){
+      // Invalid
+      SFX.wrong();
+      shakeWrap(idx);
+      return;
+    }
+    // Pour!
+    doMove(selected, idx);
+  }
+}
+
+function doMove(fromIdx, toIdx){
+  animating = true;
+  // Save history
+  history.push(tubes.map(t=>[...t]));
+  btnUndo.classList.remove('disabled');
+
+  const {newFrom, newTo, count} = pour(fromIdx, toIdx);
+  const topColor = COLORS[tubes[fromIdx][tubes[fromIdx].length-1]];
+  tubes[fromIdx] = newFrom;
+  tubes[toIdx]   = newTo;
+  moves++;
+  moveLabel.textContent = 'MOVES: ' + moves;
+  SFX.pour();
+
+  // Pour animation
+  animatePour(fromIdx, toIdx, topColor, count, ()=>{
+    animating = false;
+    selected  = -1;
+    renderTubes();
+    checkWin();
+    if(!isSolved(tubes) && !hasValidMoves()){
+      // Check lives
+      setTimeout(()=>handleNoMoves(), 400);
+    }
+  });
+}
+
+function animatePour(fromIdx, toIdx, col, count, cb){
+  const fromWrap = tubeGrid.children[fromIdx];
+  const toWrap   = tubeGrid.children[toIdx];
+  if(!fromWrap||!toWrap){cb();return;}
+
+  const fr = fromWrap.getBoundingClientRect();
+  const tr = toWrap.getBoundingClientRect();
+  const ar = app.getBoundingClientRect();
+
+  const dropCount = Math.min(count, 3);
+  let completed = 0;
+
+  for(let i=0;i<dropCount;i++){
+    const drop = document.createElement('div');
+    drop.className = 'pour-drop';
+    drop.style.cssText = `
+      background:linear-gradient(135deg,${col.light},${col.fill});
+      box-shadow:0 0 8px ${col.fill}88;
+      width:16px;height:16px;
+      top:${fr.top - ar.top + 10}px;
+      left:${(fr.left+fr.right)/2 - ar.left - 8}px;
+    `;
+    drop.style.transition = `left ${.2+i*.05}s ease, top ${.22+i*.06}s ease`;
+    app.appendChild(drop);
+
+    setTimeout(()=>{
+      drop.style.left = ((tr.left+tr.right)/2 - ar.left - 8)+'px';
+      drop.style.top  = (tr.bottom - ar.top - 20)+'px';
+    }, 20+i*60);
+
+    setTimeout(()=>{
+      drop.remove();
+      completed++;
+      if(completed===dropCount) cb();
+    }, 380+i*60);
+  }
+  if(dropCount===0) cb();
+}
+
+function shakeWrap(idx){
+  const wrap = tubeGrid.children[idx];
+  if(!wrap) return;
+  wrap.classList.add('shake');
+  setTimeout(()=>wrap.classList.remove('shake'),400);
+}
+
+function highlightSelected(){
+  Array.from(tubeGrid.children).forEach((w,i)=>{
+    w.classList.remove('selected');
+    if(i===selected) w.classList.add('selected');
+  });
+}
+
+// ── Win check ─────────────────────────────────────────────
+function checkWin(){
+  if(!isSolved(tubes)) return;
+  gameOn = false;
+  // Animate done tubes
+  tubes.forEach((_,i)=>{
+    const t=tubes[i];
+    if(t.length>0) SFX.done(i);
+  });
+  setTimeout(showLevelComplete, 600);
+}
+
+function showLevelComplete(){
+  // Stars: based on moves vs minimum reasonable
+  const cfg = getLevelCfg(level);
+  const minMoves = cfg.colors * 2;
+  const stars = moves <= minMoves ? 3 : moves <= minMoves * 2 ? 2 : 1;
+  const starStr = '⭐'.repeat(stars) + '☆'.repeat(3-stars);
+
+  // Score: stars × 100 + level × 50 + time bonus
+  const pts = stars * 100 + level * 50;
+  score += pts;
+
+  // Best
+  const prev = parseInt(localStorage.getItem('ws_best')||0);
+  if(score > prev) localStorage.setItem('ws_best', score);
+  hudRefresh();
+
+  // Fill overlay
+  document.getElementById('lcStars').textContent = starStr;
+  document.getElementById('lcTitle').textContent = 'LEVEL ' + level;
+  document.getElementById('lcMoves').textContent = moves;
+  document.getElementById('lcScore').textContent = '+' + pts;
+  document.getElementById('lcStarsNum').textContent = stars + ' / 3';
+
+  SFX.complete();
+  launchConfetti();
+  flashEl.style.background = 'rgba(134,188,37,.15)';
+  flashEl.style.opacity = '1';
+  setTimeout(()=>flashEl.style.opacity='0', 300);
+
+  setTimeout(()=>ovComplete.classList.remove('hide'), 700);
+}
+
+// ── No moves ──────────────────────────────────────────────
+function handleNoMoves(){
+  lives--;
+  updateLives();
+  if(lives <= 0){
+    gameOn = false;
+    SFX.over();
+    const prev=parseInt(localStorage.getItem('ws_best')||0);
+    const isNew=score>prev;
+    if(isNew) localStorage.setItem('ws_best',score);
+    const best=Math.max(score,prev);
+    document.getElementById('goScore').textContent = score;
+    document.getElementById('goBest').textContent  = 'BEST ' + best;
+    document.getElementById('goNew').textContent   = isNew ? 'NEW BEST 🏆' : '';
+    ovGameOver.classList.remove('hide');
+  } else {
+    // Auto-restart this level after warning
+    flashEl.style.background = 'rgba(255,30,30,.2)';
+    flashEl.style.opacity = '1';
+    setTimeout(()=>flashEl.style.opacity='0', 250);
+    setTimeout(()=>{ restartLevel(); }, 1000);
+  }
+}
+
+// ── Level control ─────────────────────────────────────────
+function startLevel(lvl){
+  level = lvl;
+  moves = 0;
+  selected = -1;
+  history = [];
+  animating = false;
+  levelStartScore = score;
+  btnUndo.classList.add('disabled');
+  moveLabel.textContent = 'MOVES: 0';
+
+  const puzzle = generatePuzzle(lvl);
+  if(!puzzle){ startLevel(lvl); return; }
+  tubes = puzzle;
+
+  hudRefresh();
+  renderTubes();
+  gameOn = true;
+  ovComplete.classList.add('hide');
+  ovGameOver.classList.add('hide');
+}
+
+function restartLevel(){
+  score = levelStartScore;
+  startLevel(level);
+}
+
+// ── HUD ───────────────────────────────────────────────────
+function hudRefresh(){
+  eScore.textContent = score;
+  eLevel.textContent = level;
+  eBest.textContent  = localStorage.getItem('ws_best')||0;
+  progLbl.textContent = 'LVL ' + level;
+  const maxLvl = 30;
+  progFill.style.width = Math.min(100,(level/maxLvl)*100)+'%';
+}
+function updateLives(){
+  lhEls.forEach((l,i)=>l.classList.toggle('gone',i>=lives));
+}
+
+// ── Confetti ──────────────────────────────────────────────
+let confettiParts=[], confRaf=null;
+function launchConfetti(){
+  const cv = confettiCv;
+  cv.width  = app.offsetWidth;
+  cv.height = app.offsetHeight;
+  const cx  = cv.getContext('2d');
+  const cols= ['#86BC25','#00ffaa','#00d4ff','#ff3355','#ffcc00','#aa22ff','#ff7700'];
+  confettiParts = Array.from({length:90}, ()=>({
+    x: Math.random()*cv.width,
+    y: -20 - Math.random()*200,
+    vx: (Math.random()-.5)*3,
+    vy: 2+Math.random()*4,
+    r: 4+Math.random()*8,
+    rot: Math.random()*Math.PI*2,
+    rotV: (Math.random()-.5)*.2,
+    col: cols[Math.floor(Math.random()*cols.length)],
+    shape: Math.random()<.5?'rect':'circle',
+    a: 1,
+  }));
+  cancelAnimationFrame(confRaf);
+  let t=0;
+  function step(){
+    if(t++>120){ cx.clearRect(0,0,cv.width,cv.height); confRaf=null; return; }
+    cx.clearRect(0,0,cv.width,cv.height);
+    confettiParts.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy; p.rot+=p.rotV;
+      p.vy+=.08; p.a=Math.max(0,1-t/110);
+      cx.save(); cx.globalAlpha=p.a;
+      cx.translate(p.x,p.y); cx.rotate(p.rot);
+      cx.fillStyle=p.col;
+      if(p.shape==='rect'){ cx.fillRect(-p.r/2,-p.r/3,p.r,p.r*.6); }
+      else{ cx.beginPath();cx.arc(0,0,p.r/2,0,Math.PI*2);cx.fill(); }
+      cx.restore();
+    });
+    confRaf=requestAnimationFrame(step);
+  }
+  step();
+}
+
+// ── Undo ──────────────────────────────────────────────────
+function undoMove(){
+  if(history.length===0) return;
+  tubes = history.pop();
+  moves = Math.max(0, moves-1);
+  moveLabel.textContent = 'MOVES: ' + moves;
+  selected=-1;
+  renderTubes();
+  if(history.length===0) btnUndo.classList.add('disabled');
+  gameOn=true;
+}
+
+// ── Events ────────────────────────────────────────────────
+document.getElementById('btnPlay').addEventListener('click',()=>{
+  AC.resume();
+  lives=3; score=0; level=1;
+  updateLives();
+  ovIntro.classList.add('hide');
+  startLevel(1);
+});
+document.getElementById('btnNext').addEventListener('click',()=>{
+  AC.resume();
+  lives=Math.min(3,lives+1); // restore 1 life on level clear
+  updateLives();
+  startLevel(level+1);
+});
+document.getElementById('btnReplayAfter').addEventListener('click',()=>{
+  AC.resume(); restartLevel();
+});
+document.getElementById('btnRetry').addEventListener('click',()=>{
+  AC.resume(); lives=3; score=0; level=1; updateLives(); startLevel(1);
+});
+btnUndo.addEventListener('click',()=>{ AC.resume(); if(gameOn) undoMove(); });
+btnRestart.addEventListener('click',()=>{ AC.resume(); if(gameOn) restartLevel(); });
+window.addEventListener('resize',()=>{ if(gameOn) renderTubes(); });
+window.addEventListener('load',()=>{
+  eBest.textContent = localStorage.getItem('ws_best')||0;
+});
+</script>
+<script>
+   if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(r  => console.log('SW registered:', r.scope))
+        .catch(e => console.log('SW error:', e));
+    });
+  }
+</script>
+</body>
+</html>
